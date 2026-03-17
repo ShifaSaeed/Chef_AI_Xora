@@ -107,6 +107,7 @@ with st.sidebar:
     
     st.title("Chef AI-Xora")
     st.subheader("Your Strategic Kitchen Mentor")
+    st.write("Developed by: [Shifa Saeed]")
     st.markdown("---")
     st.write("Ready to transform your kitchen into a 5-star studio? I handle the strategy, you handle the heat! 🔥")
     
