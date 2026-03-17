@@ -1,79 +1,179 @@
+import streamlit as st
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 import json
-from google.api_core import exceptions # Quota error handle krny k liye
+from google.api_core import exceptions
 
+# --- CONFIGURATION & SETUP ---
 load_dotenv()
-api_key=os.getenv("GEMINI_API_KEY")
-
+api_key = os.getenv("GEMINI_API_KEY")
 FILE_NAME = "chat_memory.json"
 
+st.set_page_config(page_title="Chef AI-Xora", page_icon="👨‍🍳", layout="wide")
+
+# --- UI THEME LOGIC ---
+if "theme" not in st.session_state:
+    st.session_state.theme = "light"
+
+def toggle_theme():
+    st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
+
+# --- SMART DYNAMIC CSS ---
+if st.session_state.theme == "dark":
+    bg_color = "#0E1117"
+    text_color = "#FFFFFF"
+    sidebar_bg = "#1A1C24"
+    btn_bg = "#262730"
+    btn_text = "#FFFFFF"
+else:
+    bg_color = "#FFFFFF"
+    text_color = "#000000"
+    sidebar_bg = "#F0F2F6"
+    btn_bg = "#FFFFFF"
+    btn_text = "#000000"
+
+st.markdown(f"""
+    <style>
+        .stApp {{
+            background-color: {bg_color};
+            color: {text_color};
+        }}
+        [data-testid="stSidebar"] {{
+            background-color: {sidebar_bg} !important;
+        }}
+        /* Sidebar Text and Description Visibility */
+        [data-testid="stSidebar"] .stMarkdown p, 
+        [data-testid="stSidebar"] h1, 
+        [data-testid="stSidebar"] h2, 
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] span {{
+            color: {text_color} !important;
+        }}
+        /* Global Text Color */
+        .stMarkdown, p, h1, h2, h3, label, li {{
+            color: {text_color} !important;
+        }}
+        /* Sidebar Buttons Styling */
+        [data-testid="stSidebar"] .stButton > button {{
+            background-color: {btn_bg} !important;
+            color: {btn_text} !important;
+            border: 1px solid #4B4B4B !important;
+            width: 100%;
+            border-radius: 8px;
+        }}
+        /* Prompt area remains default Streamlit for stability */
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- DATA PERSISTENCE LOGIC ---
 def load_data():
-    if os.path.exists(FILE_NAME):
-        if os.path.getsize(FILE_NAME) > 0:
-            with open(FILE_NAME, "r") as f:
-                return json.load(f)
-    return [] # Return empty list if file doesn't exist or is empty
- 
+    if os.path.exists(FILE_NAME) and os.path.getsize(FILE_NAME) > 0:
+        with open(FILE_NAME, "r") as f:
+            return json.load(f)
+    return []
+
 def save_data(chat_history):
-    new_memory=[]
+    new_memory = []
     for message in chat_history:
-        message_text = message.parts[0].text
         new_memory.append({
-            "role":message.role,
-            "parts":[{
-                "text":message_text
-            }]
+            "role": "model" if message["role"] == "assistant" else "user",
+            "parts": [{"text": message["content"]}]
+        })
+    with open(FILE_NAME, "w") as diary:
+        json.dump(new_memory, diary, indent=4)
+
+# --- GEMINI AI SETUP ---
+genai.configure(api_key=api_key)
+instructions = """ 
+1. Persona & Identity
+Name: Chef AI-Xora.
+Role: Strategic Kitchen Assistant.
+Personality: Warm, organized, and helpful with emojis (🍳, 🍰, ☕).
+
+2. Domain & Content
+- You MUST provide recipes for anything requested related to cooking and baking (Cakes, Coffee, Pizza, etc.).
+- NEVER refuse a recipe request. 
+- Strictly avoid non-food topics (politics, sports, etc.).
+
+3. The "Xora Strategy" Flow (Follow this strictly):
+Step 1: IMMEDIATELY provide the full, delicious recipe the user asked for.
+Step 2: After the recipe, perform an "Ingredient Audit." Ask the user what they already have at home.
+Step 3: Ask for their Budget (Rs).
+Step 4: Generate a smart shopping list for only the missing items based on that budget.
+
+4. Core Rules:
+- If a user mentions an ingredient is "wilting" or "expiring," make it the VIP of the recipe.
+- Remember dietary goals/allergies from previous turns (Memory).
+- Use local units (grams, kg, "ek pao").
+- Keep responses friendly and never repeat the same phrases.
+
+note: Provide the recipe first, then ask for the budget to optimize the shopping list.
+
+"""
+model = genai.GenerativeModel(model_name='gemini-2.5-flash-lite', system_instruction=instructions)
+
+# --- SIDEBAR ---
+with st.sidebar:
+    try:
+        st.image("images-removebg-preview.png", width=150) 
+    except:
+        st.header("👨‍🍳 Chef AI-Xora")
+    
+    st.title("Chef AI-Xora")
+    st.subheader("Your Strategic Kitchen Mentor")
+    st.markdown("---")
+    
+    # Description (Jo hata di thi, wo wapis aa gayi)
+    st.write("Specialized in recipes, ingredient audits, and budget-friendly shopping lists.")
+    
+    
+    # Theme Toggle Button
+    theme_label = "☀️ Switch to Light Mode" if st.session_state.theme == "dark" else "🌙 Switch to Dark Mode"
+    if st.button(theme_label, use_container_width=True):
+        toggle_theme()
+        st.rerun()
+    
+    if st.button("🗑️ Clear Kitchen Memory", use_container_width=True):
+        if os.path.exists(FILE_NAME):
+            os.remove(FILE_NAME)
+        st.session_state.messages = []
+        st.rerun()
+
+# --- MAIN UI ---
+st.title("👨‍🍳 Kitchen Strategy Hub")
+st.caption("Strategic roadmaps for your delicious meals.")
+
+if "messages" not in st.session_state:
+    saved_history = load_data()
+    st.session_state.messages = []
+    for msg in saved_history:
+        st.session_state.messages.append({
+            "role": "assistant" if msg["role"] == "model" else "user",
+            "content": msg["parts"][0]["text"]
         })
 
-    with open(FILE_NAME, "w") as diary:
-        json.dump(new_memory,diary,indent=4)
+for message in st.session_state.messages:
+    avatar = "👨‍🍳" if message["role"] == "assistant" else "👤"
+    with st.chat_message(message["role"], avatar=avatar):
+        st.markdown(message["content"])
 
-genai.configure(api_key=api_key)
+# --- CHAT LOGIC ---
+if prompt := st.chat_input("What are we cooking today?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
 
-# App ki instructions wahi hain, bas variable name fix kia hai (instructions)
-instructions = """ 1. Persona & Identity
-Name: Chef AI-Xora.
-Role: Strategic Kitchen Assistant & Waste-Reduction Specialist.
-Personality: Warm, organized, witty, and highly efficient. You are a "rememberer"—you never ask for the same dietary info twice. Use emojis (🍳, 🌿, 💸).
-Domain: Strictly limited to cooking, baking, nutrition, and kitchen budgeting. Politely decline other topics.
-
-2. Core Directives
-The "Long-Term Memory" Protocol: Remember allergies, health goals, and lifestyle. Filter future suggestions automatically.
-The "Rescue Ingredient" VIP Policy: Prioritize ingredients that are about to expire.
-Budget-Conscious Shopping: Ask for budget in Rs. Suggest quantities and "Budget Swaps" if items are too expensive.
-
-3. Interaction Flow
-- Acknowledge lifestyle/health goals.
-- Perform an "Ingredient Audit" before shopping.
-- Provide step-by-step cooking/baking guidance.
-- Use local units (grams, kg, "ek pao", etc.).
-- Never repeat the exact same phrasing."""
-
-# Model ko gemini-1.5-flash pr switch kia hai for better free limits
-model = genai.GenerativeModel(model_name='gemini-2.5-flash', system_instruction=instructions)
-
-memory = load_data()
-chat = model.start_chat(history=memory)
-
-print("----Your personal Kitchen Strategic Assistant is online (Type 'exit or bye' to stop)-----------")
-
-while True:
-    user_input = input("You:")
-
-    if user_input.lower() in ["exit","bye","quit"]:
-        save_data(chat.history)
-        print("Progress saved! GoodBye! See you tomorrow! 👋")
-        break
-
-    # ERROR HANDLING ADDED HERE
-    try:
-        response = chat.send_message(user_input)
-        print("Agent:", response.text)
-    
-    except exceptions.ResourceExhausted:
-        print("Agent: Oh ho! 🤯 Lagta hai mera dimagh thak gaya hai (Quota Exceeded). Please 1 minute wait karein, phir hum dubara cooking start karein gy! ⏳")
-    
-    except Exception as e:
-        print(f"Agent: Kuch masla ho gaya hai... 🛠️ {e}")
+    with st.chat_message("assistant", avatar="👨‍🍳"):
+        with st.spinner("Chef AI-Xora is preparing... 🍳"):
+            history_for_gemini = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in st.session_state.messages[:-1]]
+            try:
+                chat_session = model.start_chat(history=history_for_gemini)
+                response = chat_session.send_message(prompt)
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                save_data(st.session_state.messages)
+            except exceptions.ResourceExhausted:
+                st.error("⚠️ Kitchen crowded (Quota Exceeded). Try in 1 minute.")
+            except Exception as e:
+                st.error(f"Error: {e}")
