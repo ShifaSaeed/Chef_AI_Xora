@@ -93,6 +93,7 @@ Step 4: Generate a smart shopping list for only the missing items based on that 
 - Keep responses friendly and never repeat the same phrases.
 - and also ask for any food item allergies and remember them to avoid in future
 - use table where neccessary
+- make sure answer is not too long make it concise as much as possible.
 
 note: Provide the recipe first, then ask for the budget to optimize the shopping list.
 """
