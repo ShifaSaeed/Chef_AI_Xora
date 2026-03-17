@@ -7,7 +7,13 @@ from google.api_core import exceptions
 
 # --- CONFIGURATION & SETUP ---
 load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
+else:    
+    api_key = os.getenv("GEMINI_API_KEY")
+    
+    
 FILE_NAME = "chat_memory.json"
 
 st.set_page_config(page_title="Chef AI-Xora", page_icon="👨‍🍳", layout="wide")
@@ -35,26 +41,10 @@ else:
 
 st.markdown(f"""
     <style>
-        .stApp {{
-            background-color: {bg_color};
-            color: {text_color};
-        }}
-        [data-testid="stSidebar"] {{
-            background-color: {sidebar_bg} !important;
-        }}
-        /* Sidebar Text and Description Visibility */
-        [data-testid="stSidebar"] .stMarkdown p, 
-        [data-testid="stSidebar"] h1, 
-        [data-testid="stSidebar"] h2, 
-        [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] span {{
-            color: {text_color} !important;
-        }}
-        /* Global Text Color */
-        .stMarkdown, p, h1, h2, h3, label, li {{
-            color: {text_color} !important;
-        }}
-        /* Sidebar Buttons Styling */
+        .stApp {{ background-color: {bg_color}; color: {text_color}; }}
+        [data-testid="stSidebar"] {{ background-color: {sidebar_bg} !important; }}
+        [data-testid="stSidebar"] .stMarkdown p, h1, h2, h3, span {{ color: {text_color} !important; }}
+        .stMarkdown, p, h1, h2, h3, label, li {{ color: {text_color} !important; }}
         [data-testid="stSidebar"] .stButton > button {{
             background-color: {btn_bg} !important;
             color: {btn_text} !important;
@@ -62,7 +52,6 @@ st.markdown(f"""
             width: 100%;
             border-radius: 8px;
         }}
-        /* Prompt area remains default Streamlit for stability */
     </style>
     """, unsafe_allow_html=True)
 
@@ -74,12 +63,7 @@ def load_data():
     return []
 
 def save_data(chat_history):
-    new_memory = []
-    for message in chat_history:
-        new_memory.append({
-            "role": "model" if message["role"] == "assistant" else "user",
-            "parts": [{"text": message["content"]}]
-        })
+    new_memory = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in chat_history]
     with open(FILE_NAME, "w") as diary:
         json.dump(new_memory, diary, indent=4)
 
@@ -94,7 +78,7 @@ Personality: Warm, organized, and helpful with emojis (🍳, 🍰, ☕).
 2. Domain & Content
 - You MUST provide recipes for anything requested related to cooking and baking (Cakes, Coffee, Pizza, etc.).
 - NEVER refuse a recipe request. 
-- Strictly avoid non-food topics (politics, sports, etc.).
+- Strictly avoid non-food topics (politics, sports, study , weather etc.).
 
 3. The "Xora Strategy" Flow (Follow this strictly):
 Step 1: IMMEDIATELY provide the full, delicious recipe the user asked for.
@@ -107,11 +91,12 @@ Step 4: Generate a smart shopping list for only the missing items based on that 
 - Remember dietary goals/allergies from previous turns (Memory).
 - Use local units (grams, kg, "ek pao").
 - Keep responses friendly and never repeat the same phrases.
+- and also ask for any food item allergies and remember them to avoid in future
+- use table where neccessary
 
 note: Provide the recipe first, then ask for the budget to optimize the shopping list.
-
 """
-model = genai.GenerativeModel(model_name='gemini-2.5-flash-lite', system_instruction=instructions)
+model = genai.GenerativeModel(model_name='gemini-2.5-flash', system_instruction=instructions)
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -123,35 +108,31 @@ with st.sidebar:
     st.title("Chef AI-Xora")
     st.subheader("Your Strategic Kitchen Mentor")
     st.markdown("---")
+    st.write("Ready to transform your kitchen into a 5-star studio? I handle the strategy, you handle the heat! 🔥")
     
-    # Description (Jo hata di thi, wo wapis aa gayi)
-    st.write("Specialized in recipes, ingredient audits, and budget-friendly shopping lists.")
-    
-    
-    # Theme Toggle Button
     theme_label = "☀️ Switch to Light Mode" if st.session_state.theme == "dark" else "🌙 Switch to Dark Mode"
     if st.button(theme_label, use_container_width=True):
         toggle_theme()
         st.rerun()
     
-    if st.button("🗑️ Clear Kitchen Memory", use_container_width=True):
-        if os.path.exists(FILE_NAME):
-            os.remove(FILE_NAME)
+    if st.button("🗑️ Reset Kitchen Memory", use_container_width=True):
+        if os.path.exists(FILE_NAME): os.remove(FILE_NAME)
         st.session_state.messages = []
         st.rerun()
 
 # --- MAIN UI ---
 st.title("👨‍🍳 Kitchen Strategy Hub")
-st.caption("Strategic roadmaps for your delicious meals.")
+st.caption("Turning ingredients into masterpieces, one step at a time.")
 
 if "messages" not in st.session_state:
     saved_history = load_data()
     st.session_state.messages = []
-    for msg in saved_history:
-        st.session_state.messages.append({
-            "role": "assistant" if msg["role"] == "model" else "user",
-            "content": msg["parts"][0]["text"]
-        })
+    if not saved_history:
+        # Initial Welcome Message from Chef
+        st.session_state.messages.append({"role": "assistant", "content": "Welcome to my kitchen! 🍳 I'm Chef AI-Xora. What delicious masterpiece are we whipping up today?"})
+    else:
+        for msg in saved_history:
+            st.session_state.messages.append({"role": "assistant" if msg["role"] == "model" else "user", "content": msg["parts"][0]["text"]})
 
 for message in st.session_state.messages:
     avatar = "👨‍🍳" if message["role"] == "assistant" else "👤"
@@ -159,13 +140,13 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # --- CHAT LOGIC ---
-if prompt := st.chat_input("What are we cooking today?"):
+if prompt := st.chat_input("Tell me a dish or an ingredient..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="👨‍🍳"):
-        with st.spinner("Chef AI-Xora is preparing... 🍳"):
+        with st.spinner("Chef AI-Xora is sharpening the knives... 🔪"):
             history_for_gemini = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in st.session_state.messages[:-1]]
             try:
                 chat_session = model.start_chat(history=history_for_gemini)
@@ -173,7 +154,5 @@ if prompt := st.chat_input("What are we cooking today?"):
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
                 save_data(st.session_state.messages)
-            except exceptions.ResourceExhausted:
-                st.error("⚠️ Kitchen crowded (Quota Exceeded). Try in 1 minute.")
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Kitchen Error: {e}")
