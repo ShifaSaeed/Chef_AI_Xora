@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 import json
 from google.api_core import exceptions
+import base64
 
 # --- CONFIGURATION & SETUP ---
 load_dotenv()
@@ -25,26 +26,62 @@ if "theme" not in st.session_state:
 def toggle_theme():
     st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
 
+# --- IMAGE ENCODING FUNCTION ---
+def get_base64(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# Laptop se image load karne ke liye
+try:
+    # Aapki file ka sahi naam yahan hona chahiye
+    img_base64 = get_base64("gradient_sidebar.jpg")
+    sidebar_img = f"data:image/png;base64,{img_base64}"
+except Exception as e:
+    # Agar file na mile to koi online image ya khali chor dein
+    sidebar_img = "" 
+
 # --- SMART DYNAMIC CSS ---
 if st.session_state.theme == "dark":
     bg_color = "#0E1117"
     text_color = "#FFFFFF"
-    sidebar_bg = "#1A1C24"
+    sidebar_overlay = "rgba(26, 28, 36, 0.2)" 
     btn_bg = "#262730"
     btn_text = "#FFFFFF"
 else:
     bg_color = "#FFFFFF"
     text_color = "#000000"
-    sidebar_bg = "#F0F2F6"
+    sidebar_overlay = "rgba(240, 242, 246, 0.2)" 
     btn_bg = "#FFFFFF"
     btn_text = "#000000"
 
 st.markdown(f"""
     <style>
-        .stApp {{ background-color: {bg_color}; color: {text_color}; }}
-        [data-testid="stSidebar"] {{ background-color: {sidebar_bg} !important; }}
-        [data-testid="stSidebar"] .stMarkdown p, h1, h2, h3, span {{ color: {text_color} !important; }}
-        .stMarkdown, p, h1, h2, h3, label, li {{ color: {text_color} !important; }}
+        .stApp {{ 
+            background-color: {bg_color}; 
+            color: {text_color}; 
+        }}
+        
+        [data-testid="stSidebar"] {{
+            background-image: linear-gradient({sidebar_overlay}, {sidebar_overlay}), url("{sidebar_img}");
+            background-size: cover; /* '100% 100%' se image khinch sakti hai, 'cover' best hai */
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }}
+
+        [data-testid="stSidebar"] .stMarkdown p, 
+        [data-testid="stSidebar"] h1, 
+        [data-testid="stSidebar"] h2, 
+        [data-testid="stSidebar"] h3, 
+        [data-testid="stSidebar"] span {{ 
+            color: {text_color} !important; 
+        }}
+        
+        .stMarkdown, p, h1, h2, h3, label, li {{ 
+            color: {text_color} !important; 
+        }}
+
         [data-testid="stSidebar"] .stButton > button {{
             background-color: {btn_bg} !important;
             color: {btn_text} !important;
@@ -102,7 +139,7 @@ model = genai.GenerativeModel(model_name='gemini-2.5-flash', system_instruction=
 # --- SIDEBAR ---
 with st.sidebar:
     try:
-        st.image("images-removebg-preview.png", width=150) 
+        st.image("images-removebg-preview.png", width=200) 
     except:
         st.header("👨‍🍳 Chef AI-Xora")
     
